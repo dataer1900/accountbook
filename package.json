@@ -1,0 +1,27 @@
+{
+  "name": "personal-bookkeeping-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/dev.mjs",
+    "start:windows": "powershell -ExecutionPolicy Bypass -File .\\start.ps1",
+    "dev": "vite --host 0.0.0.0",
+    "backend": "node server/index.mjs",
+    "dev:backend": "node server/index.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vite-plugin-pwa": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3"
+  }
+}
