@@ -1,16 +1,26 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { resolve } from 'node:path'
 
 const backendPort = Number(process.env.BOOKKEEPING_API_PORT || 8787)
 const backendOrigin = process.env.BOOKKEEPING_API_ORIGIN || `http://localhost:${backendPort}`
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        aiEntry: resolve(__dirname, 'ai-entry.html'),
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
+        'ai-entry.webmanifest',
         'icons/icon-192.svg',
         'icons/icon-512.svg',
         'icons/icon-192.png',

@@ -26,15 +26,8 @@ import type { CategoryConfig, SourceUtterance, TransactionInput, TransactionReco
 type SectionKey = 'record' | 'view' | 'reimbursement' | 'mine'
 type ReimbursementStatus = 'unsubmitted' | 'submitted' | 'reimbursed'
 
-function shouldLaunchAiComposer() {
-  if (typeof window === 'undefined') return false
-  const params = new URLSearchParams(window.location.search)
-  return params.get('entry') === 'ai'
-}
-
 export default function App() {
-  const aiEntryPath = '/?entry=ai'
-  const isAiEntry = shouldLaunchAiComposer()
+  const aiEntryPath = '/ai-entry.html'
   const [records, setRecords] = useState<TransactionRecord[]>([])
   const [sourceUtterances, setSourceUtterances] = useState<SourceUtterance[]>([])
   const [categoryConfig, setCategoryConfig] = useState<CategoryConfig>({ income: [], expense: [] })
@@ -230,34 +223,6 @@ export default function App() {
         <section className="panel">
           <p className="form-error">{dataError}</p>
         </section>
-      </main>
-    )
-  }
-
-  if (isAiEntry) {
-    return (
-      <main className="app-shell ai-entry-shell">
-        <header className="app-header">
-          <div>
-            <h1 className="app-title">快记</h1>
-          </div>
-          <button className="header-action" type="button" onClick={() => { window.location.href = '/' }}>
-            返回账本
-          </button>
-        </header>
-
-        {dataError ? <p className="form-error">{dataError}</p> : null}
-
-        <p className="ai-entry-note">输入一句话，直接记账。</p>
-
-        <AiRecordInput
-          categories={categoryConfig}
-          title="一句话记账"
-          focusToken={1}
-          onSubmit={handleAiSubmit}
-          showConfig={false}
-          onConfigStatusChange={setAiConfigured}
-        />
       </main>
     )
   }
