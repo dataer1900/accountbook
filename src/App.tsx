@@ -506,9 +506,7 @@ export default function App() {
           <BackupPanel
             records={records}
             sourceUtterances={sourceUtterances}
-            recordsPath={recordsPath}
-            sourcePath={sourcePath}
-            categoryPath={categoryPath}
+            categoryConfig={categoryConfig}
             onImport={handleImportRecords}
           />
         </section>

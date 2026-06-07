@@ -1,18 +1,17 @@
 import { useRef, useState } from 'react'
+import { getAiExportConfigSnapshot } from '../aiClient'
 import {
   exportRecordsAsMarkdown,
   exportSourceUtterancesAsMarkdown,
   mergeRecords,
   parseImportedRecords,
 } from '../storage'
-import type { SourceUtterance, TransactionRecord } from '../types'
+import type { CategoryConfig, SourceUtterance, TransactionRecord } from '../types'
 
 type BackupPanelProps = {
   records: TransactionRecord[]
   sourceUtterances: SourceUtterance[]
-  recordsPath: string
-  sourcePath: string
-  categoryPath: string
+  categoryConfig: CategoryConfig
   onImport: (records: TransactionRecord[]) => void
 }
 
@@ -79,16 +78,17 @@ async function shareOrDownloadFile(options: ShareFileOptions): Promise<ShareResu
 export function BackupPanel({
   records,
   sourceUtterances,
-  recordsPath,
-  sourcePath,
-  categoryPath,
+  categoryConfig,
   onImport,
 }: BackupPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  async function runBackup(options: ShareFileOptions, successMessage: { shared: string; downloaded: string; cancelled: string }) {
+  async function runBackup(
+    options: ShareFileOptions,
+    successMessage: { shared: string; downloaded: string; cancelled: string },
+  ) {
     try {
       const result = await shareOrDownloadFile(options)
 
@@ -102,7 +102,7 @@ export function BackupPanel({
       setError('')
     } catch {
       setMessage('')
-      setError('备份没有成功触发，请换用“导出账单”再试一次。')
+      setError('导出失败，请稍后再试。')
     }
   }
 
@@ -115,25 +115,9 @@ export function BackupPanel({
         type: 'text/markdown;charset=utf-8',
       },
       {
-        shared: `已打开系统分享，请保存 ${filename} 到“文件”App 或 iCloud Drive。`,
-        downloaded: `已触发下载，请保存 ${filename}。`,
-        cancelled: '已取消本次备份。',
-      },
-    )
-  }
-
-  async function handleExportMarkdown() {
-    const filename = `小账本-backup-${getDateStamp()}.md`
-    await runBackup(
-      {
-        content: exportRecordsAsMarkdown(records),
-        filename,
-        type: 'text/markdown;charset=utf-8',
-      },
-      {
         shared: `已打开系统分享：${filename}`,
-        downloaded: `已导出 ${records.length} 条 Markdown 账单。`,
-        cancelled: '已取消账单导出。',
+        downloaded: `已导出 ${filename}`,
+        cancelled: '已取消导出。',
       },
     )
   }
@@ -148,10 +132,33 @@ export function BackupPanel({
       },
       {
         shared: `已打开系统分享：${filename}`,
-        downloaded: `已导出 ${sourceUtterances.length} 条原始语料。`,
-        cancelled: '已取消语料导出。',
+        downloaded: `已导出 ${filename}`,
+        cancelled: '已取消导出。',
       },
     )
+  }
+
+  async function handleExportConfig() {
+    const filename = `小账本-config-${getDateStamp()}.json`
+
+    try {
+      const snapshot = await getAiExportConfigSnapshot(categoryConfig)
+      await runBackup(
+        {
+          content: JSON.stringify(snapshot, null, 2),
+          filename,
+          type: 'application/json;charset=utf-8',
+        },
+        {
+          shared: `已打开系统分享：${filename}`,
+          downloaded: `已导出 ${filename}`,
+          cancelled: '已取消导出。',
+        },
+      )
+    } catch {
+      setMessage('')
+      setError('导出配置失败，请稍后再试。')
+    }
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -180,45 +187,16 @@ export function BackupPanel({
         <h2>备份</h2>
         <span>{records.length} 条</span>
       </div>
-      <p className="empty-text">当前数据保存在这个浏览器里。请固定用同一个域名，并定期备份到“文件”App 或 iCloud Drive。</p>
 
-      <div className="backup-callout">
-        <strong>一键备份</strong>
-        <span>iPhone 上会优先打开系统分享，不支持时会自动回退到下载。</span>
+      <div className="backup-actions compact">
         <button className="secondary-button backup-primary-button" type="button" onClick={handleQuickBackup} disabled={!records.length}>
-          备份到文件
-        </button>
-      </div>
-
-      <div className="report-grid">
-        <div>
-          <span>账单文件</span>
-          <strong>账单记录.md</strong>
-          <small className="empty-text">{recordsPath || '当前为浏览器本地模式'}</small>
-        </div>
-        <div>
-          <span>语料文件</span>
-          <strong>原始语料.md</strong>
-          <small className="empty-text">{sourcePath || '当前为浏览器本地模式'}</small>
-        </div>
-        <div>
-          <span>分类文件</span>
-          <strong>分类配置.json</strong>
-          <small className="empty-text">{categoryPath || '当前为浏览器本地模式'}</small>
-        </div>
-      </div>
-
-      <div className="backup-tips">
-        <span>建议：每次记完重要账目就点一次“备份到文件”。</span>
-        <span>恢复时，用“导入账单”选回之前备份的 `.md` 文件。</span>
-      </div>
-
-      <div className="backup-actions">
-        <button className="secondary-button" type="button" onClick={handleExportMarkdown} disabled={!records.length}>
           导出账单
         </button>
         <button className="secondary-button" type="button" onClick={handleExportSourceUtterances}>
           导出语料
+        </button>
+        <button className="secondary-button" type="button" onClick={handleExportConfig}>
+          导出配置
         </button>
         <button className="secondary-button" type="button" onClick={() => fileInputRef.current?.click()}>
           导入账单

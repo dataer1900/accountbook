@@ -549,63 +549,21 @@ button:disabled {
   background: #ffffff;
 }
 
-.backup-callout {
-  display: grid;
-  gap: 8px;
-  margin: 14px 0;
-  padding: 14px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #f6f7ff 0%, #eef6ff 100%);
-  border: 1px solid #e3e8ff;
-}
-
-.backup-callout strong {
-  font-size: 1rem;
-}
-
-.backup-callout span,
-.backup-tips {
-  color: #64748b;
-  font-size: 0.9rem;
-  line-height: 1.6;
-}
-
 .backup-primary-button {
-  width: 100%;
-  min-height: 44px;
   background: #1d4ed8;
   color: #ffffff;
+}
+
+.backup-actions.compact .backup-primary-button {
+  width: 100%;
+  min-height: 44px;
 }
 
 .backup-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin: 14px 0 0;
-}
-
-.backup-tips {
-  display: grid;
-  gap: 4px;
-  margin: 14px 0 0;
-}
-
-.report-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.report-grid div {
-  display: grid;
-  gap: 5px;
-  border-radius: 16px;
-  background: #f8f8fb;
-  padding: 12px;
-}
-
-.report-grid strong {
-  font-size: 0.95rem;
+  margin-top: 12px;
 }
 
 .report-note {

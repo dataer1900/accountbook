@@ -1,11 +1,16 @@
-import { createDefaultRecordsMarkdown, createDefaultSourceMarkdown, DEFAULT_CATEGORY_CONFIG, LOCAL_STORAGE_LABELS } from './bookkeepingDefaults'
+import {
+  createDefaultRecordsMarkdown,
+  createDefaultSourceMarkdown,
+  DEFAULT_CATEGORY_CONFIG,
+  LOCAL_STORAGE_LABELS,
+} from './bookkeepingDefaults'
 import { getToday } from './dateUtils'
 import type {
   AiConfigInput,
   AiConfigStatus,
-  AiParseRecordSuccessResponse,
   AiConfigUpdateResponse,
   AiParseRecordResponse,
+  AiParseRecordSuccessResponse,
   BookkeepingFilesResponse,
   CategoryConfig,
   TransactionInput,
@@ -24,6 +29,13 @@ type StoredAiConfig = {
   model: string
   apiKey: string
   timeoutMs: number
+}
+
+export type AiExportConfigSnapshot = {
+  exportedAt: string
+  categoryConfig: CategoryConfig
+  aiConfig: StoredAiConfig
+  prompt: string
 }
 
 function hasBrowserStorage() {
@@ -159,40 +171,41 @@ function buildChatCompletionsUrl(baseUrl: string) {
 }
 
 function buildSystemPrompt(request: { defaultDate: string; locale: string; categories: CategoryConfig }) {
-  return `你是一个中文个人记账解析器。请把用户的一句话解析成一条或多条账单，只返回 JSON，不要返回 Markdown。
-
-当前日期：${request.defaultDate}
-语言：${request.locale}
-收入分类：${request.categories.income.join('、')}
-支出分类：${request.categories.expense.join('、')}
-
-返回格式：
-{
-  "records": [
-    {
-      "type": "income" 或 "expense",
-      "amount": 数字,
-      "category": "必须从对应分类中选择",
-      "date": "YYYY-MM-DD",
-      "note": "简短备注",
-      "reimbursable": true 或 false
-    }
-  ],
-  "confidence": 0 到 1 的数字,
-  "warnings": []
-}
-
-规则：
-1. 用户一次说了几笔账单，就拆成几条 records。
-2. 每条记录都要单独判断日期；没有明确日期的记录使用当前日期。
-3. “花了、买、支付、打车、午饭、咖啡、房租”等通常是支出。
-4. “工资、到账、收到、红包、奖金、投资收益”等通常是收入。
-5. 相对日期如今天、昨天、上周五必须基于当前日期换算。
-6. 未知支出归为“其他支出”，未知收入归为“额外收入”。
-7. note 保留每条账单的核心事项，不要包含金额。
-8. 出现“报销、可报销、公司报销、客户报销、出差、差旅、发票报销”等语义时 reimbursable 为 true。
-9. 出现“不能报销、不可报销、自费、私人、个人消费”等语义时 reimbursable 为 false。
-10. 收入记录的 reimbursable 默认为 false。`
+  return [
+    '你是一个中文个人记账解析器。请把用户的一句话解析成一条或多条账单，只返回 JSON，不要返回 Markdown。',
+    `当前日期：${request.defaultDate}`,
+    `语言：${request.locale}`,
+    `收入分类：${request.categories.income.join('、')}`,
+    `支出分类：${request.categories.expense.join('、')}`,
+    '',
+    '返回格式：',
+    '{',
+    '  "records": [',
+    '    {',
+    '      "type": "income" 或 "expense",',
+    '      "amount": 数字,',
+    '      "category": "必须从对应分类中选择",',
+    '      "date": "YYYY-MM-DD",',
+    '      "note": "简短备注",',
+    '      "reimbursable": true 或 false',
+    '    }',
+    '  ],',
+    '  "confidence": 0 到 1 的数字,',
+    '  "warnings": []',
+    '}',
+    '',
+    '规则：',
+    '1. 用户一次说了几笔账单，就拆成几条 records。',
+    '2. 每条记录都要单独判断日期；没有明确日期的记录使用当前日期。',
+    '3. “花了、买、支付、打车、午饭、咖啡、房租”等通常是支出。',
+    '4. “工资、到账、收到、红包、奖金、投资收益”等通常是收入。',
+    '5. 相对日期如今天、昨天、上周五必须基于当前日期换算。',
+    '6. 未知支出归为“其他支出”，未知收入归为“额外收入”。',
+    '7. note 保留每条账单的核心事项，不要包含金额。',
+    '8. 出现“报销、可报销、公司报销、客户报销、出差、差旅、发票报销”等语义时 reimbursable 为 true。',
+    '9. 出现“不能报销、不可报销、自费、私人、个人消费”等语义时 reimbursable 为 false。',
+    '10. 收入记录的 reimbursable 默认为 false。',
+  ].join('\n')
 }
 
 function normalizeAmount(amount: number) {
@@ -204,7 +217,6 @@ function isValidDate(value: string) {
 
   const [year, month, day] = value.split('-').map(Number)
   const date = new Date(year, month - 1, day)
-
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
 }
 
@@ -323,6 +335,22 @@ export async function saveAiConfig(input: AiConfigInput): Promise<AiConfigUpdate
 
   saveLocalAiConfig(nextConfig)
   return toAiConfigStatus(nextConfig)
+}
+
+export async function getAiExportConfigSnapshot(categoryConfig: CategoryConfig): Promise<AiExportConfigSnapshot> {
+  const aiConfig = loadLocalAiConfig()
+  const normalizedCategories = normalizeCategoryConfig(categoryConfig)
+
+  return {
+    exportedAt: new Date().toISOString(),
+    categoryConfig: normalizedCategories,
+    aiConfig,
+    prompt: buildSystemPrompt({
+      defaultDate: getToday(),
+      locale: 'zh-CN',
+      categories: normalizedCategories,
+    }),
+  }
 }
 
 export async function parseNaturalLanguageRecord(
