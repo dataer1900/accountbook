@@ -41,6 +41,10 @@ button:disabled {
   padding: calc(16px + env(safe-area-inset-top)) 14px calc(92px + env(safe-area-inset-bottom));
 }
 
+.ai-entry-shell {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
 .app-header {
   display: flex;
   align-items: end;
@@ -245,6 +249,13 @@ button:disabled {
 
 .app-section {
   padding-bottom: 20px;
+}
+
+.ai-entry-note {
+  margin: 0 2px 14px;
+  color: #8e8e93;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .summary-grid {

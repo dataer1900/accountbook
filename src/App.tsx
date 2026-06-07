@@ -34,6 +34,7 @@ function shouldLaunchAiComposer() {
 
 export default function App() {
   const aiEntryPath = '/?entry=ai'
+  const isAiEntry = shouldLaunchAiComposer()
   const [records, setRecords] = useState<TransactionRecord[]>([])
   const [sourceUtterances, setSourceUtterances] = useState<SourceUtterance[]>([])
   const [categoryConfig, setCategoryConfig] = useState<CategoryConfig>({ income: [], expense: [] })
@@ -108,13 +109,6 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [])
-
-  useEffect(() => {
-    if (!shouldLaunchAiComposer()) return
-    setActiveSection('record')
-    setIsComposerOpen(true)
-    setAiFocusToken((current) => current + 1)
   }, [])
 
   async function persist(nextRecords: TransactionRecord[], nextUtterances: SourceUtterance[], nextCategoryConfig: CategoryConfig) {
@@ -236,6 +230,34 @@ export default function App() {
         <section className="panel">
           <p className="form-error">{dataError}</p>
         </section>
+      </main>
+    )
+  }
+
+  if (isAiEntry) {
+    return (
+      <main className="app-shell ai-entry-shell">
+        <header className="app-header">
+          <div>
+            <h1 className="app-title">快记</h1>
+          </div>
+          <button className="header-action" type="button" onClick={() => { window.location.href = '/' }}>
+            返回账本
+          </button>
+        </header>
+
+        {dataError ? <p className="form-error">{dataError}</p> : null}
+
+        <p className="ai-entry-note">输入一句话，直接记账。</p>
+
+        <AiRecordInput
+          categories={categoryConfig}
+          title="一句话记账"
+          focusToken={1}
+          onSubmit={handleAiSubmit}
+          showConfig={false}
+          onConfigStatusChange={setAiConfigured}
+        />
       </main>
     )
   }
@@ -455,10 +477,10 @@ export default function App() {
           />
           <section className="panel">
             <div className="panel-heading">
-              <h2>AI 快捷入口</h2>
-              <span>桌面直达</span>
+              <h2>AI 入口</h2>
+              <span>桌面用</span>
             </div>
-            <p className="composer-note">把这个链接加到 iPhone 主屏，点一下就会直接弹出 AI 记账。</p>
+            <p className="composer-note">加到 iPhone 主屏后，点一下直接打开 AI 记账。</p>
             <div className="quick-entry-box">
               <strong>{aiEntryPath}</strong>
               <button
@@ -468,7 +490,7 @@ export default function App() {
                   window.location.href = `${window.location.origin}${aiEntryPath}`
                 }}
               >
-                打开 AI 桌面入口
+                打开 AI 入口
               </button>
               <button
                 className="secondary-button manual-entry-trigger"
@@ -486,7 +508,7 @@ export default function App() {
                   }
                 }}
               >
-                复制 AI 入口链接
+                复制链接
               </button>
             </div>
             {quickEntryMessage ? <p className="form-success">{quickEntryMessage}</p> : null}
