@@ -22,35 +22,48 @@ type ShareFileOptions = {
   type: string
 }
 
+type ShareResult = 'shared' | 'downloaded' | 'cancelled'
+
 function getDateStamp() {
   const date = new Date()
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function createFile({ content, filename, type }: ShareFileOptions) {
-  const blob = new Blob([content], { type })
-  return new File([blob], filename, { type })
 }
 
 function downloadFile(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
+
   link.href = url
   link.download = filename
+  link.rel = 'noopener'
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+
+  window.setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 1000)
 }
 
-async function shareOrDownloadFile(options: ShareFileOptions) {
-  const file = createFile(options)
+async function shareOrDownloadFile(options: ShareFileOptions): Promise<ShareResult> {
+  const blob = new Blob([options.content], { type: options.type })
 
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
-      const sharePayload = navigator.canShare?.({ files: [file] })
-        ? { files: [file], title: options.filename }
-        : { title: options.filename, text: options.content }
-      await navigator.share(sharePayload)
+      const canUseFiles = typeof File !== 'undefined' && typeof navigator.canShare === 'function'
+      if (canUseFiles) {
+        const file = new File([blob], options.filename, { type: options.type })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: options.filename })
+          return 'shared'
+        }
+      }
+
+      await navigator.share({
+        title: options.filename,
+        text: options.content,
+      })
       return 'shared'
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -75,62 +88,70 @@ export function BackupPanel({
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
+  async function runBackup(options: ShareFileOptions, successMessage: { shared: string; downloaded: string; cancelled: string }) {
+    try {
+      const result = await shareOrDownloadFile(options)
+
+      if (result === 'cancelled') {
+        setMessage(successMessage.cancelled)
+        setError('')
+        return
+      }
+
+      setMessage(result === 'shared' ? successMessage.shared : successMessage.downloaded)
+      setError('')
+    } catch {
+      setMessage('')
+      setError('备份没有成功触发，请换用“导出账单”再试一次。')
+    }
+  }
+
   async function handleQuickBackup() {
     const filename = `小账本-backup-${getDateStamp()}.md`
-    const result = await shareOrDownloadFile({
-      content: exportRecordsAsMarkdown(records),
-      filename,
-      type: 'text/markdown;charset=utf-8',
-    })
-
-    if (result === 'cancelled') {
-      setMessage('已取消本次备份。')
-      setError('')
-      return
-    }
-
-    setMessage(
-      result === 'shared'
-        ? `已打开系统分享，请保存 ${filename} 到“文件”App 或 iCloud Drive。`
-        : `已导出 ${records.length} 条账单，请转存 ${filename}。`,
+    await runBackup(
+      {
+        content: exportRecordsAsMarkdown(records),
+        filename,
+        type: 'text/markdown;charset=utf-8',
+      },
+      {
+        shared: `已打开系统分享，请保存 ${filename} 到“文件”App 或 iCloud Drive。`,
+        downloaded: `已触发下载，请保存 ${filename}。`,
+        cancelled: '已取消本次备份。',
+      },
     )
-    setError('')
   }
 
   async function handleExportMarkdown() {
     const filename = `小账本-backup-${getDateStamp()}.md`
-    const result = await shareOrDownloadFile({
-      content: exportRecordsAsMarkdown(records),
-      filename,
-      type: 'text/markdown;charset=utf-8',
-    })
-
-    if (result === 'cancelled') {
-      setMessage('已取消账单导出。')
-      setError('')
-      return
-    }
-
-    setMessage(result === 'shared' ? `已打开系统分享：${filename}` : `已导出 ${records.length} 条 Markdown 账单。`)
-    setError('')
+    await runBackup(
+      {
+        content: exportRecordsAsMarkdown(records),
+        filename,
+        type: 'text/markdown;charset=utf-8',
+      },
+      {
+        shared: `已打开系统分享：${filename}`,
+        downloaded: `已导出 ${records.length} 条 Markdown 账单。`,
+        cancelled: '已取消账单导出。',
+      },
+    )
   }
 
   async function handleExportSourceUtterances() {
     const filename = `小账本-source-${getDateStamp()}.md`
-    const result = await shareOrDownloadFile({
-      content: exportSourceUtterancesAsMarkdown(sourceUtterances),
-      filename,
-      type: 'text/markdown;charset=utf-8',
-    })
-
-    if (result === 'cancelled') {
-      setMessage('已取消语料导出。')
-      setError('')
-      return
-    }
-
-    setMessage(result === 'shared' ? `已打开系统分享：${filename}` : `已导出 ${sourceUtterances.length} 条原始语料。`)
-    setError('')
+    await runBackup(
+      {
+        content: exportSourceUtterancesAsMarkdown(sourceUtterances),
+        filename,
+        type: 'text/markdown;charset=utf-8',
+      },
+      {
+        shared: `已打开系统分享：${filename}`,
+        downloaded: `已导出 ${sourceUtterances.length} 条原始语料。`,
+        cancelled: '已取消语料导出。',
+      },
+    )
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -163,7 +184,7 @@ export function BackupPanel({
 
       <div className="backup-callout">
         <strong>一键备份</strong>
-        <span>iPhone 上会优先打开系统分享，直接存到“文件”更稳。</span>
+        <span>iPhone 上会优先打开系统分享，不支持时会自动回退到下载。</span>
         <button className="secondary-button backup-primary-button" type="button" onClick={handleQuickBackup} disabled={!records.length}>
           备份到文件
         </button>
