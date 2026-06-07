@@ -46,9 +46,9 @@ export function CategoryStats({
         <p className="empty-text">{emptyText}</p>
       ) : (
         <div className="category-panel">
-          <div className="donut-card">
-            <div className="donut-chart" style={{ background: donutStyle }}>
-              <div className="donut-center">
+          <div className="donut-card compact">
+            <div className="donut-chart compact" style={{ background: donutStyle }}>
+              <div className="donut-center compact">
                 <span>{displayCenterLabel}</span>
                 <strong>{formatCurrency(displayCenterValue)}</strong>
               </div>
@@ -64,21 +64,21 @@ export function CategoryStats({
           </div>
 
           <div className="category-list">
-          {categories.map((category) => (
-            <article className="category-item" key={category.category}>
-              <div className="category-row">
-                <strong>
-                  <i className="category-dot" style={{ backgroundColor: palette[categories.indexOf(category) % palette.length] }} />
-                  {category.category}
-                </strong>
-                <span>{formatCurrency(category.total)}</span>
-              </div>
-              <div className="category-meta">
-                <span>占比 {category.percentage}%</span>
-                <span>{category.count} 笔</span>
-              </div>
-            </article>
-          ))}
+            {categories.map((category, index) => (
+              <article className="category-item" key={category.category}>
+                <div className="category-row">
+                  <strong>
+                    <i className="category-dot" style={{ backgroundColor: palette[index % palette.length] }} />
+                    {category.category}
+                  </strong>
+                  <span>{formatCurrency(category.total)}</span>
+                </div>
+                <div className="category-meta">
+                  <span>占比 {category.percentage}%</span>
+                  <span>{category.count} 笔</span>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       )}

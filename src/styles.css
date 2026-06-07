@@ -538,10 +538,44 @@ button:disabled {
   background: #ffffff;
 }
 
+.backup-callout {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f6f7ff 0%, #eef6ff 100%);
+  border: 1px solid #e3e8ff;
+}
+
+.backup-callout strong {
+  font-size: 1rem;
+}
+
+.backup-callout span,
+.backup-tips {
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.backup-primary-button {
+  width: 100%;
+  min-height: 44px;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
 .backup-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin: 14px 0 0;
+}
+
+.backup-tips {
+  display: grid;
+  gap: 4px;
   margin: 14px 0 0;
 }
 
@@ -584,6 +618,10 @@ button:disabled {
   gap: 10px;
 }
 
+.donut-card.compact {
+  gap: 8px;
+}
+
 .donut-chart {
   width: min(100%, 240px);
   aspect-ratio: 1;
@@ -591,6 +629,10 @@ button:disabled {
   border-radius: 50%;
   display: grid;
   place-items: center;
+}
+
+.donut-chart.compact {
+  width: min(100%, 176px);
 }
 
 .donut-center {
@@ -605,13 +647,26 @@ button:disabled {
   box-shadow: inset 0 0 0 1px #ececf1;
 }
 
+.donut-center.compact {
+  width: 54%;
+  padding: 10px;
+}
+
 .donut-center span {
   color: #8e8e93;
   font-size: 0.8rem;
 }
 
+.donut-center.compact span {
+  font-size: 0.72rem;
+}
+
 .donut-center strong {
   font-size: 1.2rem;
+}
+
+.donut-center.compact strong {
+  font-size: 1rem;
 }
 
 .donut-legend {
@@ -864,6 +919,20 @@ button:disabled {
 
 .manual-entry-trigger {
   width: 100%;
+}
+
+.quick-entry-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f8f8fb;
+}
+
+.quick-entry-box strong {
+  word-break: break-all;
+  font-size: 0.92rem;
+  color: #1d4ed8;
 }
 
 .reimbursement-actions {

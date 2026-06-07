@@ -16,9 +16,20 @@ type BackupPanelProps = {
   onImport: (records: TransactionRecord[]) => void
 }
 
+type ShareFileOptions = {
+  content: string
+  filename: string
+  type: string
+}
+
 function getDateStamp() {
   const date = new Date()
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function createFile({ content, filename, type }: ShareFileOptions) {
+  const blob = new Blob([content], { type })
+  return new File([blob], filename, { type })
 }
 
 function downloadFile(content: string, filename: string, type: string) {
@@ -29,6 +40,27 @@ function downloadFile(content: string, filename: string, type: string) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+async function shareOrDownloadFile(options: ShareFileOptions) {
+  const file = createFile(options)
+
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      const sharePayload = navigator.canShare?.({ files: [file] })
+        ? { files: [file], title: options.filename }
+        : { title: options.filename, text: options.content }
+      await navigator.share(sharePayload)
+      return 'shared'
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return 'cancelled'
+      }
+    }
+  }
+
+  downloadFile(options.content, options.filename, options.type)
+  return 'downloaded'
 }
 
 export function BackupPanel({
@@ -43,19 +75,61 @@ export function BackupPanel({
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  function handleExportMarkdown() {
-    downloadFile(exportRecordsAsMarkdown(records), `小账本-backup-${getDateStamp()}.md`, 'text/markdown;charset=utf-8')
-    setMessage(`已导出 ${records.length} 条 Markdown 账单。`)
+  async function handleQuickBackup() {
+    const filename = `小账本-backup-${getDateStamp()}.md`
+    const result = await shareOrDownloadFile({
+      content: exportRecordsAsMarkdown(records),
+      filename,
+      type: 'text/markdown;charset=utf-8',
+    })
+
+    if (result === 'cancelled') {
+      setMessage('已取消本次备份。')
+      setError('')
+      return
+    }
+
+    setMessage(
+      result === 'shared'
+        ? `已打开系统分享，请保存 ${filename} 到“文件”App 或 iCloud Drive。`
+        : `已导出 ${records.length} 条账单，请转存 ${filename}。`,
+    )
     setError('')
   }
 
-  function handleExportSourceUtterances() {
-    downloadFile(
-      exportSourceUtterancesAsMarkdown(sourceUtterances),
-      `小账本-source-utterances-${getDateStamp()}.md`,
-      'text/markdown;charset=utf-8',
-    )
-    setMessage(`已导出 ${sourceUtterances.length} 条原始语料。`)
+  async function handleExportMarkdown() {
+    const filename = `小账本-backup-${getDateStamp()}.md`
+    const result = await shareOrDownloadFile({
+      content: exportRecordsAsMarkdown(records),
+      filename,
+      type: 'text/markdown;charset=utf-8',
+    })
+
+    if (result === 'cancelled') {
+      setMessage('已取消账单导出。')
+      setError('')
+      return
+    }
+
+    setMessage(result === 'shared' ? `已打开系统分享：${filename}` : `已导出 ${records.length} 条 Markdown 账单。`)
+    setError('')
+  }
+
+  async function handleExportSourceUtterances() {
+    const filename = `小账本-source-${getDateStamp()}.md`
+    const result = await shareOrDownloadFile({
+      content: exportSourceUtterancesAsMarkdown(sourceUtterances),
+      filename,
+      type: 'text/markdown;charset=utf-8',
+    })
+
+    if (result === 'cancelled') {
+      setMessage('已取消语料导出。')
+      setError('')
+      return
+    }
+
+    setMessage(result === 'shared' ? `已打开系统分享：${filename}` : `已导出 ${sourceUtterances.length} 条原始语料。`)
     setError('')
   }
 
@@ -75,7 +149,7 @@ export function BackupPanel({
     const shouldReplace = window.confirm(`识别到 ${parsed.records.length} 条记录。点击“确定”替换当前数据，点击“取消”则合并导入。`)
     const nextRecords = shouldReplace ? parsed.records : mergeRecords(records, parsed.records)
     onImport(nextRecords)
-    setMessage(shouldReplace ? `已替换为 ${nextRecords.length} 条记录。` : `已合并，当前共有 ${nextRecords.length} 条记录。`)
+    setMessage(shouldReplace ? `已替换为 ${nextRecords.length} 条记录。` : `已合并导入，当前共有 ${nextRecords.length} 条记录。`)
     setError('')
   }
 
@@ -85,24 +159,39 @@ export function BackupPanel({
         <h2>备份</h2>
         <span>{records.length} 条</span>
       </div>
-      <p className="empty-text">当前为本地文件模式。账单、语料、分类都会分别写入固定文件。</p>
+      <p className="empty-text">当前数据保存在这个浏览器里。请固定用同一个域名，并定期备份到“文件”App 或 iCloud Drive。</p>
+
+      <div className="backup-callout">
+        <strong>一键备份</strong>
+        <span>iPhone 上会优先打开系统分享，直接存到“文件”更稳。</span>
+        <button className="secondary-button backup-primary-button" type="button" onClick={handleQuickBackup} disabled={!records.length}>
+          备份到文件
+        </button>
+      </div>
+
       <div className="report-grid">
         <div>
           <span>账单文件</span>
           <strong>账单记录.md</strong>
-          <small className="empty-text">{recordsPath || '未读取到路径'}</small>
+          <small className="empty-text">{recordsPath || '当前为浏览器本地模式'}</small>
         </div>
         <div>
           <span>语料文件</span>
           <strong>原始语料.md</strong>
-          <small className="empty-text">{sourcePath || '未读取到路径'}</small>
+          <small className="empty-text">{sourcePath || '当前为浏览器本地模式'}</small>
         </div>
         <div>
           <span>分类文件</span>
           <strong>分类配置.json</strong>
-          <small className="empty-text">{categoryPath || '未读取到路径'}</small>
+          <small className="empty-text">{categoryPath || '当前为浏览器本地模式'}</small>
         </div>
       </div>
+
+      <div className="backup-tips">
+        <span>建议：每次记完重要账目就点一次“备份到文件”。</span>
+        <span>恢复时，用“导入账单”选回之前备份的 `.md` 文件。</span>
+      </div>
+
       <div className="backup-actions">
         <button className="secondary-button" type="button" onClick={handleExportMarkdown} disabled={!records.length}>
           导出账单
@@ -115,6 +204,7 @@ export function BackupPanel({
         </button>
         <input accept="text/markdown,.md,.markdown" hidden ref={fileInputRef} type="file" onChange={handleFileChange} />
       </div>
+
       {message ? <p className="form-success">{message}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
     </section>
