@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { getAiConfigStatus, parseNaturalLanguageRecord, saveAiConfig } from '../aiClient'
 import { formatCurrency } from '../reporting'
 import type { AiConfigStatus, CategoryConfig, TransactionInput } from '../types'
@@ -10,8 +10,11 @@ type AiRecordInputProps = {
   showConfig?: boolean
   showInput?: boolean
   title?: string
+  showPanelHeading?: boolean
   compact?: boolean
+  autoOpenConfigWhenUnconfigured?: boolean
   onConfigStatusChange?: (configured: boolean) => void
+  footer?: ReactNode
 }
 
 export function AiRecordInput({
@@ -20,9 +23,12 @@ export function AiRecordInput({
   onSubmit,
   showConfig = true,
   showInput = true,
-  title = '智能记一笔',
+  title = 'AI记一笔',
+  showPanelHeading = true,
   compact = false,
+  autoOpenConfigWhenUnconfigured = false,
   onConfigStatusChange,
+  footer,
 }: AiRecordInputProps) {
   const [text, setText] = useState('')
   const [configured, setConfigured] = useState<boolean | null>(null)
@@ -44,14 +50,20 @@ export function AiRecordInput({
     const status = await getAiConfigStatus()
     setConfigStatus(status)
     setConfigured(status.configured)
-    onConfigStatusChange?.(status.configured)
     setBaseUrl(status.baseUrl || '')
     setModel(status.model || '')
     setTimeoutMs(String(status.timeoutMs || 20000))
+    if (autoOpenConfigWhenUnconfigured && !status.configured) {
+      setConfigOpen(true)
+    }
+    onConfigStatusChange?.(status.configured)
   }
 
   useEffect(() => {
-    refreshConfigStatus().catch(() => setConfigured(false))
+    refreshConfigStatus().catch(() => {
+      setConfigured(false)
+      onConfigStatusChange?.(false)
+    })
   }, [])
 
   useEffect(() => {
@@ -65,13 +77,14 @@ export function AiRecordInput({
     setConfigError('')
 
     const nextTimeoutMs = Number(timeoutMs)
+
     if (!baseUrl.trim() || !model.trim()) {
       setConfigError('请填写 Base URL 和模型名称。')
       return
     }
 
     if (!apiKey.trim() && !configStatus?.apiKeyConfigured) {
-      setConfigError('请填写 API key。')
+      setConfigError('请填写 API Key。')
       return
     }
 
@@ -93,14 +106,14 @@ export function AiRecordInput({
       setApiKey('')
       setConfigStatus(result)
       setConfigured(result.configured)
-      onConfigStatusChange?.(result.configured)
       setBaseUrl(result.baseUrl || '')
       setModel(result.model || '')
       setTimeoutMs(String(result.timeoutMs || 20000))
       setConfigMessage('AI 配置已保存。')
+      onConfigStatusChange?.(result.configured)
     } catch {
-      onConfigStatusChange?.(false)
       setConfigError('无法保存 AI 配置。')
+      onConfigStatusChange?.(false)
     } finally {
       setSavingConfig(false)
     }
@@ -124,7 +137,8 @@ export function AiRecordInput({
     }
 
     if (!configured) {
-      setError('当前未连接 AI 服务，请使用手动记账。')
+      setError('当前还没有配置 AI，请先保存 AI 配置。')
+      if (showConfig) setConfigOpen(true)
       return
     }
 
@@ -133,12 +147,15 @@ export function AiRecordInput({
       const result = await parseNaturalLanguageRecord(trimmed, categories)
       if (!result.ok) {
         setError(getFriendlyError(result.code, result.message))
+        if (result.code === 'AI_NOT_CONFIGURED' && showConfig) {
+          setConfigOpen(true)
+        }
         return
       }
 
       const records = result.records.length ? result.records : result.record ? [result.record] : []
       if (!records.length) {
-        setError('没有识别出有效账目，请换一种说法或使用手动记账。')
+        setError('没有识别出有效账目，请换一种说法。')
         return
       }
 
@@ -147,12 +164,12 @@ export function AiRecordInput({
       setConfigured(true)
       setMessage(
         `已添加 ${records.length} 条记录：${records
-          .map((record) => `${record.category} ${formatCurrency(record.amount)}${record.reimbursable ? ' · 可报销' : ''}`)
+          .map((record) => `${record.category} ${formatCurrency(record.amount)}${record.reimbursable ? ' / 可报销' : ''}`)
           .join('；')}`,
       )
     } catch {
       setConfigured(false)
-      setError('AI 服务不可用，请使用手动记账。')
+      setError('AI 服务暂时不可用，请稍后再试。')
     } finally {
       setLoading(false)
     }
@@ -160,10 +177,10 @@ export function AiRecordInput({
 
   return (
     <section className="panel ai-input-panel">
-      {!compact ? (
+      {!compact && showPanelHeading ? (
         <div className="panel-heading">
           <h2>{title}</h2>
-          <span>{configured ? 'AI 已连接' : 'AI 不可用'}</span>
+          <span>{configured ? 'AI 已连接' : 'AI 未配置'}</span>
         </div>
       ) : null}
 
@@ -171,37 +188,57 @@ export function AiRecordInput({
         <div className="ai-config-wrapper">
           <button className="ai-config-toggle" type="button" onClick={() => setConfigOpen((prev) => !prev)}>
             <span>AI 配置</span>
-            <span className="ai-config-toggle-state">{configStatus?.apiKeyConfigured ? '已连接' : '未配置'}</span>
+            <span className="ai-config-toggle-state">{configStatus?.apiKeyConfigured ? '已保存' : '未配置'}</span>
           </button>
 
           {configOpen ? (
             <form className="record-form ai-config-form" onSubmit={handleSaveConfig}>
               <label>
                 Base URL
-                <input placeholder="https://api.deepseek.com" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
+                <input
+                  placeholder="https://api.deepseek.com"
+                  value={baseUrl}
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
               </label>
+
               <label>
                 模型
-                <input placeholder="deepseek-chat" value={model} onChange={(event) => setModel(event.target.value)} />
+                <input
+                  placeholder="deepseek-chat"
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                />
               </label>
+
               <label>
-                API key
+                API Key
                 <input
                   autoComplete="off"
-                  placeholder={configStatus?.apiKeyConfigured ? '留空则继续使用已保存的 key' : '输入你的 API key'}
+                  placeholder={configStatus?.apiKeyConfigured ? '留空则继续使用已保存的 Key' : '输入你的 API Key'}
                   type="password"
                   value={apiKey}
                   onChange={(event) => setApiKey(event.target.value)}
                 />
               </label>
+
               <label>
                 超时时间（毫秒）
-                <input inputMode="numeric" min="3000" max="120000" step="1000" type="number" value={timeoutMs} onChange={(event) => setTimeoutMs(event.target.value)} />
+                <input
+                  inputMode="numeric"
+                  min="3000"
+                  max="120000"
+                  step="1000"
+                  type="number"
+                  value={timeoutMs}
+                  onChange={(event) => setTimeoutMs(event.target.value)}
+                />
               </label>
+
               <button className="secondary-button" disabled={savingConfig} type="submit">
                 {savingConfig ? '保存中...' : '保存 AI 配置'}
               </button>
-              <p className="empty-text">静态部署到 Cloudflare 后，这部分只有在你额外接入 AI 后端时才会生效。</p>
+
               {configMessage ? <p className="form-success">{configMessage}</p> : null}
               {configError ? <p className="form-error">{configError}</p> : null}
             </form>
@@ -212,11 +249,11 @@ export function AiRecordInput({
       {showInput ? (
         <form className="record-form" onSubmit={handleSubmit}>
           <label className={compact ? 'compact-input-label' : undefined}>
-            {compact ? null : '说一句账单'}
+            {compact ? null : '说一句账单内容'}
             <textarea
               ref={textareaRef}
               maxLength={200}
-              placeholder="例如：昨天出差打车花了 38，可报销；今天工资到账 12000；午饭花了 28"
+              placeholder="例如：昨天出差打车花了28，可报销；今天工资到账2000；午饭花了18"
               rows={compact ? 4 : 3}
               value={text}
               onChange={(event) => setText(event.target.value)}
@@ -224,24 +261,24 @@ export function AiRecordInput({
           </label>
 
           <button className="primary-button" disabled={loading || !configured} type="submit">
-            {loading ? '识别中...' : '智能记一笔'}
+            {loading ? '识别中...' : 'AI记一笔'}
           </button>
 
           {message ? <p className="form-success">{message}</p> : null}
           {error ? <p className="form-error">{error}</p> : null}
-          {configured === false ? <p className="empty-text">当前部署默认不带 AI 后端，你仍可完整使用手动记账、统计、报销和离线功能。</p> : null}
         </form>
       ) : null}
+      {footer ? <div className="ai-panel-footer">{footer}</div> : null}
     </section>
   )
 }
 
 function getFriendlyError(code: string, message?: string) {
-  if (code === 'AI_NOT_CONFIGURED') return 'AI 服务尚未配置，请先使用手动记账。'
-  if (code === 'AI_UNAVAILABLE') return '当前部署为静态版本，AI 解析不可用，请使用手动记账。'
+  if (code === 'AI_NOT_CONFIGURED') return 'AI 还没有配置，请先保存 AI 配置。'
+  if (code === 'AI_UNAVAILABLE' || code === 'AI_UPSTREAM_ERROR') return '当前 AI 服务不可用，请稍后再试。'
   if (code === 'INVALID_INPUT') return '输入内容不符合要求，请换一句更短的描述。'
-  if (code === 'PARSE_FAILED' || code === 'VALIDATION_FAILED') return '没有识别出有效账目，请换一种说法或使用手动记账。'
+  if (code === 'PARSE_FAILED' || code === 'VALIDATION_FAILED') return '没有识别出有效账目，请换一种说法。'
   if (code === 'AI_TIMEOUT') return 'AI 响应超时，请稍后再试。'
   if (message) return message
-  return 'AI 识别暂时不可用，请稍后再试或使用手动记账。'
+  return 'AI 识别暂时不可用，请稍后再试。'
 }

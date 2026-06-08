@@ -434,49 +434,58 @@ export default function App() {
         </section>
       ) : (
         <section className="app-section stack" aria-label="我的页面">
-          <AiRecordInput
-            categories={categoryConfig}
-            showInput={false}
-            title="AI 配置"
-            onConfigStatusChange={setAiConfigured}
-          />
           <section className="panel">
             <div className="panel-heading">
-              <h2>AI 入口</h2>
-              <span>桌面用</span>
+              <h2>AI 配置</h2>
+              <span>{aiConfigured ? 'AI 已配置' : 'AI 未配置'}</span>
             </div>
-            <p className="composer-note">加到 iPhone 主屏后，点一下直接打开 AI 记账。</p>
-            <div className="quick-entry-box">
-              <strong>{aiEntryPath}</strong>
-              <button
-                className="secondary-button manual-entry-trigger"
-                type="button"
-                onClick={() => {
-                  window.location.href = `${window.location.origin}${aiEntryPath}`
-                }}
-              >
-                打开 AI 入口
-              </button>
-              <button
-                className="secondary-button manual-entry-trigger"
-                type="button"
-                onClick={async () => {
-                  try {
-                    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                      await navigator.clipboard.writeText(`${window.location.origin}${aiEntryPath}`)
-                      setQuickEntryMessage('AI 入口链接已复制。')
-                      return
-                    }
-                    setQuickEntryMessage('当前浏览器不支持一键复制，请手动记下这个链接。')
-                  } catch {
-                    setQuickEntryMessage('复制失败，请稍后重试。')
-                  }
-                }}
-              >
-                复制链接
-              </button>
-            </div>
-            {quickEntryMessage ? <p className="form-success">{quickEntryMessage}</p> : null}
+            <AiRecordInput
+              categories={categoryConfig}
+              showInput={false}
+              showPanelHeading={false}
+              onConfigStatusChange={setAiConfigured}
+              footer={
+                <div className="ai-entry-compact">
+                  <div className="ai-entry-compact-header">
+                    <div>
+                      <strong>AI 入口</strong>
+                      <p>主屏快捷打开</p>
+                    </div>
+                    <code>{aiEntryPath}</code>
+                  </div>
+                  <div className="ai-entry-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => {
+                        window.location.href = `${window.location.origin}${aiEntryPath}`
+                      }}
+                    >
+                      打开
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                            await navigator.clipboard.writeText(`${window.location.origin}${aiEntryPath}`)
+                            setQuickEntryMessage('AI 入口链接已复制。')
+                            return
+                          }
+                          setQuickEntryMessage('当前浏览器不支持一键复制，请手动记下这个链接。')
+                        } catch {
+                          setQuickEntryMessage('复制失败，请稍后重试。')
+                        }
+                      }}
+                    >
+                      复制链接
+                    </button>
+                  </div>
+                  {quickEntryMessage ? <p className="form-success">{quickEntryMessage}</p> : null}
+                </div>
+              }
+            />
           </section>
           <section className="panel">
             <div className="panel-heading">

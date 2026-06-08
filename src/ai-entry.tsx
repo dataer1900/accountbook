@@ -2,7 +2,13 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { AiRecordInput } from './components/AiRecordInput'
-import { appendSourceUtterance, createRecord, loadBookkeepingData, saveBookkeepingData, addCategoryToConfig } from './storage'
+import {
+  addCategoryToConfig,
+  appendSourceUtterance,
+  createRecord,
+  loadBookkeepingData,
+  saveBookkeepingData,
+} from './storage'
 import './styles.css'
 import type { CategoryConfig, SourceUtterance, TransactionInput, TransactionRecord } from './types'
 
@@ -25,11 +31,13 @@ function AiEntryApp() {
         setRecords(data.records)
         setUtterances(data.utterances)
         setCategoryConfig(data.categoryConfig)
-        setReady(true)
         setError('')
       } catch {
         if (!cancelled) {
           setError('无法读取账本数据，请稍后重试。')
+        }
+      } finally {
+        if (!cancelled) {
           setReady(true)
         }
       }
@@ -54,7 +62,7 @@ function AiEntryApp() {
       await saveBookkeepingData(nextRecords, nextUtterances, nextCategoryConfig)
       setError('')
     } catch {
-      setError('保存失败，当前改动未成功写入。')
+      setError('保存失败，当前改动没有成功写入本地。')
     }
   }
 
@@ -64,13 +72,19 @@ function AiEntryApp() {
         <div>
           <h1 className="app-title">快记</h1>
         </div>
-        <button className="header-action" type="button" onClick={() => { window.location.href = '/' }}>
+        <button
+          className="header-action"
+          type="button"
+          onClick={() => {
+            window.location.href = '/'
+          }}
+        >
           返回账本
         </button>
       </header>
 
       {error ? <p className="form-error">{error}</p> : null}
-      <p className="ai-entry-note">输入一句话，直接记账。</p>
+      <p className="ai-entry-note">这里可以直接配置 AI，然后一句话记账。</p>
 
       {ready ? (
         <AiRecordInput
@@ -78,7 +92,8 @@ function AiEntryApp() {
           title="一句话记账"
           focusToken={1}
           onSubmit={handleAiSubmit}
-          showConfig={false}
+          showConfig
+          autoOpenConfigWhenUnconfigured
         />
       ) : (
         <section className="panel">
