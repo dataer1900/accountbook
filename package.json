@@ -4,11 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "node scripts/dev.mjs",
+    "start": "vite --host 0.0.0.0 --open",
     "start:windows": "powershell -ExecutionPolicy Bypass -File .\\start.ps1",
     "dev": "vite --host 0.0.0.0",
-    "backend": "node server/index.mjs",
-    "dev:backend": "node server/index.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },

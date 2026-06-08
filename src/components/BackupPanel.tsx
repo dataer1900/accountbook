@@ -1,17 +1,15 @@
 import { useRef, useState } from 'react'
-import { getAiExportConfigSnapshot } from '../aiClient'
 import {
   exportRecordsAsMarkdown,
   exportSourceUtterancesAsMarkdown,
   mergeRecords,
   parseImportedRecords,
 } from '../storage'
-import type { CategoryConfig, SourceUtterance, TransactionRecord } from '../types'
+import type { SourceUtterance, TransactionRecord } from '../types'
 
 type BackupPanelProps = {
   records: TransactionRecord[]
   sourceUtterances: SourceUtterance[]
-  categoryConfig: CategoryConfig
   onImport: (records: TransactionRecord[]) => void
 }
 
@@ -78,7 +76,6 @@ async function shareOrDownloadFile(options: ShareFileOptions): Promise<ShareResu
 export function BackupPanel({
   records,
   sourceUtterances,
-  categoryConfig,
   onImport,
 }: BackupPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -138,29 +135,6 @@ export function BackupPanel({
     )
   }
 
-  async function handleExportConfig() {
-    const filename = `小账本-config-${getDateStamp()}.json`
-
-    try {
-      const snapshot = await getAiExportConfigSnapshot(categoryConfig)
-      await runBackup(
-        {
-          content: JSON.stringify(snapshot, null, 2),
-          filename,
-          type: 'application/json;charset=utf-8',
-        },
-        {
-          shared: `已打开系统分享：${filename}`,
-          downloaded: `已导出 ${filename}`,
-          cancelled: '已取消导出。',
-        },
-      )
-    } catch {
-      setMessage('')
-      setError('导出配置失败，请稍后再试。')
-    }
-  }
-
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -194,9 +168,6 @@ export function BackupPanel({
         </button>
         <button className="secondary-button" type="button" onClick={handleExportSourceUtterances}>
           导出语料
-        </button>
-        <button className="secondary-button" type="button" onClick={handleExportConfig}>
-          导出配置
         </button>
         <button className="secondary-button" type="button" onClick={() => fileInputRef.current?.click()}>
           导入账单

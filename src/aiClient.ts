@@ -9,6 +9,7 @@ import type {
   AiConfigInput,
   AiConfigStatus,
   AiConfigUpdateResponse,
+  AiParseRecordErrorResponse,
   AiParseRecordResponse,
   AiParseRecordSuccessResponse,
   BookkeepingFilesResponse,
@@ -23,6 +24,9 @@ const STORAGE_KEYS = {
   aiConfig: 'bookkeeping.aiConfig.v1',
 }
 
+export const DEFAULT_AI_BASE_URL = 'https://api.deepseek.com/chat/completions'
+export const DEFAULT_AI_MODEL = 'deepseek-v4-flash'
+
 type StoredAiConfig = {
   provider: string
   baseUrl: string
@@ -36,6 +40,12 @@ export type AiExportConfigSnapshot = {
   categoryConfig: CategoryConfig
   aiConfig: StoredAiConfig
   prompt: string
+}
+
+export type AiImportConfigSnapshot = {
+  exportedAt?: string
+  categoryConfig?: CategoryConfig
+  aiConfig?: Partial<StoredAiConfig>
 }
 
 function hasBrowserStorage() {
@@ -114,8 +124,8 @@ function saveLocalBookkeepingFiles(input: {
 function getDefaultAiConfig(): StoredAiConfig {
   return {
     provider: 'openai-compatible',
-    baseUrl: '',
-    model: '',
+    baseUrl: DEFAULT_AI_BASE_URL,
+    model: DEFAULT_AI_MODEL,
     apiKey: '',
     timeoutMs: 20000,
   }
@@ -319,17 +329,17 @@ export async function getAiConfigStatus(): Promise<AiConfigStatus> {
 export async function saveAiConfig(input: AiConfigInput): Promise<AiConfigUpdateResponse> {
   const nextConfig: StoredAiConfig = {
     provider: 'openai-compatible',
-    baseUrl: input.baseUrl.trim(),
-    model: input.model.trim(),
+    baseUrl: input.baseUrl.trim() || DEFAULT_AI_BASE_URL,
+    model: input.model.trim() || DEFAULT_AI_MODEL,
     apiKey: input.apiKey.trim(),
     timeoutMs: Number.isFinite(input.timeoutMs) ? input.timeoutMs : 20000,
   }
 
-  if (!nextConfig.baseUrl || !nextConfig.model || !nextConfig.apiKey) {
+  if (!nextConfig.apiKey) {
     return {
       ok: false,
       code: 'INVALID_INPUT',
-      message: 'Base URL、模型名称和 API key 不能为空。',
+      message: 'API key 不能为空。',
     }
   }
 
@@ -351,6 +361,44 @@ export async function getAiExportConfigSnapshot(categoryConfig: CategoryConfig):
       categories: normalizedCategories,
     }),
   }
+}
+
+export async function importAiConfigSnapshot(
+  snapshot: AiImportConfigSnapshot,
+): Promise<AiConfigStatus | AiParseRecordErrorResponse> {
+  const aiConfig = snapshot?.aiConfig
+  if (!aiConfig || typeof aiConfig !== 'object') {
+    return {
+      ok: false,
+      code: 'INVALID_INPUT',
+      message: '配置文件格式不正确。',
+    }
+  }
+
+  const provider = typeof aiConfig.provider === 'string' && aiConfig.provider.trim() ? aiConfig.provider.trim() : 'openai-compatible'
+  const baseUrl = typeof aiConfig.baseUrl === 'string' && aiConfig.baseUrl.trim() ? aiConfig.baseUrl.trim() : DEFAULT_AI_BASE_URL
+  const model = typeof aiConfig.model === 'string' && aiConfig.model.trim() ? aiConfig.model.trim() : DEFAULT_AI_MODEL
+  const apiKey = typeof aiConfig.apiKey === 'string' ? aiConfig.apiKey.trim() : ''
+  const timeoutMs = Number.isFinite(aiConfig.timeoutMs) ? Number(aiConfig.timeoutMs) : 20000
+
+  if (!apiKey) {
+    return {
+      ok: false,
+      code: 'INVALID_INPUT',
+      message: '配置文件缺少 API Key。',
+    }
+  }
+
+  const nextConfig: StoredAiConfig = {
+    provider,
+    baseUrl,
+    model,
+    apiKey,
+    timeoutMs,
+  }
+
+  saveLocalAiConfig(nextConfig)
+  return toAiConfigStatus(nextConfig)
 }
 
 export async function parseNaturalLanguageRecord(

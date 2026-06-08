@@ -3,9 +3,6 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { resolve } from 'node:path'
 
-const backendPort = Number(process.env.BOOKKEEPING_API_PORT || 8787)
-const backendOrigin = process.env.BOOKKEEPING_API_ORIGIN || `http://localhost:${backendPort}`
-
 export default defineConfig({
   build: {
     rollupOptions: {
@@ -97,9 +94,4 @@ export default defineConfig({
       },
     }),
   ],
-  server: {
-    proxy: {
-      '/api': backendOrigin,
-    },
-  },
 })

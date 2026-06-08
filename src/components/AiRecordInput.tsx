@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { getAiConfigStatus, parseNaturalLanguageRecord, saveAiConfig } from '../aiClient'
+import {
+  DEFAULT_AI_BASE_URL,
+  DEFAULT_AI_MODEL,
+  getAiConfigStatus,
+  getAiExportConfigSnapshot,
+  importAiConfigSnapshot,
+  parseNaturalLanguageRecord,
+  saveAiConfig,
+} from '../aiClient'
 import { formatCurrency } from '../reporting'
 import type { AiConfigStatus, CategoryConfig, TransactionInput } from '../types'
 
@@ -15,6 +23,66 @@ type AiRecordInputProps = {
   autoOpenConfigWhenUnconfigured?: boolean
   onConfigStatusChange?: (configured: boolean) => void
   footer?: ReactNode
+}
+
+type ShareFileOptions = {
+  content: string
+  filename: string
+  type: string
+}
+
+type ShareResult = 'shared' | 'downloaded' | 'cancelled'
+
+function getDateStamp() {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function downloadFile(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = filename
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+
+  window.setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 1000)
+}
+
+async function shareOrDownloadFile(options: ShareFileOptions): Promise<ShareResult> {
+  const blob = new Blob([options.content], { type: options.type })
+
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      const canUseFiles = typeof File !== 'undefined' && typeof navigator.canShare === 'function'
+      if (canUseFiles) {
+        const file = new File([blob], options.filename, { type: options.type })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: options.filename })
+          return 'shared'
+        }
+      }
+
+      await navigator.share({
+        title: options.filename,
+        text: options.content,
+      })
+      return 'shared'
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return 'cancelled'
+      }
+    }
+  }
+
+  downloadFile(options.content, options.filename, options.type)
+  return 'downloaded'
 }
 
 export function AiRecordInput({
@@ -40,18 +108,20 @@ export function AiRecordInput({
   const [loading, setLoading] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   const [savingConfig, setSavingConfig] = useState(false)
+  const [exportingConfig, setExportingConfig] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [configMessage, setConfigMessage] = useState('')
   const [configError, setConfigError] = useState('')
+  const configImportRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   async function refreshConfigStatus() {
     const status = await getAiConfigStatus()
     setConfigStatus(status)
     setConfigured(status.configured)
-    setBaseUrl(status.baseUrl || '')
-    setModel(status.model || '')
+    setBaseUrl(status.baseUrl || DEFAULT_AI_BASE_URL)
+    setModel(status.model || DEFAULT_AI_MODEL)
     setTimeoutMs(String(status.timeoutMs || 20000))
     if (autoOpenConfigWhenUnconfigured && !status.configured) {
       setConfigOpen(true)
@@ -116,6 +186,64 @@ export function AiRecordInput({
       onConfigStatusChange?.(false)
     } finally {
       setSavingConfig(false)
+    }
+  }
+
+  async function handleExportConfig() {
+    setConfigMessage('')
+    setConfigError('')
+    setExportingConfig(true)
+
+    try {
+      const filename = `小账本-ai-config-${getDateStamp()}.json`
+      const snapshot = await getAiExportConfigSnapshot(categories)
+      const result = await shareOrDownloadFile({
+        content: JSON.stringify(snapshot, null, 2),
+        filename,
+        type: 'application/json;charset=utf-8',
+      })
+
+      if (result === 'cancelled') {
+        setConfigMessage('已取消导出。')
+        return
+      }
+
+      setConfigMessage(result === 'shared' ? `已打开系统分享：${filename}` : `已导出 ${filename}`)
+    } catch {
+      setConfigError('导出配置失败，请稍后再试。')
+    } finally {
+      setExportingConfig(false)
+    }
+  }
+
+  async function handleImportConfig(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setConfigMessage('')
+    setConfigError('')
+
+    try {
+      const raw = await file.text()
+      const parsed = JSON.parse(raw) as unknown
+      const result = await importAiConfigSnapshot(parsed as Parameters<typeof importAiConfigSnapshot>[0])
+
+      if (!result.ok) {
+        setConfigError(result.message)
+        return
+      }
+
+      setConfigStatus(result)
+      setConfigured(result.configured)
+      setBaseUrl(result.baseUrl || DEFAULT_AI_BASE_URL)
+      setModel(result.model || DEFAULT_AI_MODEL)
+      setApiKey('')
+      setTimeoutMs(String(result.timeoutMs || 20000))
+      setConfigMessage('AI 配置已导入。')
+      onConfigStatusChange?.(result.configured)
+    } catch {
+      setConfigError('导入失败，请确认文件是有效的 JSON 配置。')
     }
   }
 
@@ -238,6 +366,21 @@ export function AiRecordInput({
               <button className="secondary-button" disabled={savingConfig} type="submit">
                 {savingConfig ? '保存中...' : '保存 AI 配置'}
               </button>
+              <div className="ai-config-actions">
+                <button className="secondary-button" disabled={exportingConfig} type="button" onClick={handleExportConfig}>
+                  {exportingConfig ? '导出中...' : '导出配置'}
+                </button>
+                <button className="secondary-button" type="button" onClick={() => configImportRef.current?.click()}>
+                  导入配置
+                </button>
+                <input
+                  accept="application/json,.json"
+                  hidden
+                  ref={configImportRef}
+                  type="file"
+                  onChange={handleImportConfig}
+                />
+              </div>
 
               {configMessage ? <p className="form-success">{configMessage}</p> : null}
               {configError ? <p className="form-error">{configError}</p> : null}
