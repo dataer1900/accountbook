@@ -11,8 +11,10 @@ import type {
   AiConfigUpdateResponse,
   AiParseRecordErrorResponse,
   AiParseRecordResponse,
+  AiParseRecordSuccessResponse,
   BookkeepingFilesResponse,
   CategoryConfig,
+  TransactionInput,
 } from './types'
 
 const STORAGE_KEYS = {
@@ -22,10 +24,8 @@ const STORAGE_KEYS = {
   aiConfig: 'bookkeeping.aiConfig.v1',
 }
 
-const API_BASE = '/api'
-
 export const DEFAULT_AI_BASE_URL = 'https://api.deepseek.com'
-export const DEFAULT_AI_MODEL = 'deepseek-chat'
+export const DEFAULT_AI_MODEL = 'deepseek-v4-flash'
 
 type StoredAiConfig = {
   provider: string
@@ -179,6 +179,12 @@ function toAiConfigStatus(config: StoredAiConfig): AiConfigStatus {
   }
 }
 
+function buildChatCompletionsUrl(baseUrl: string) {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  if (trimmed.endsWith('/chat/completions')) return trimmed
+  return `${trimmed}/chat/completions`
+}
+
 function buildSystemPrompt(request: { defaultDate: string; locale: string; categories: CategoryConfig }) {
   return [
     '你是一个中文个人记账解析器。请把用户的一句话解析成一条或多条账单，只返回 JSON，不要返回 Markdown。',
@@ -217,6 +223,110 @@ function buildSystemPrompt(request: { defaultDate: string; locale: string; categ
   ].join('\n')
 }
 
+function normalizeAmount(amount: number) {
+  return Math.round(Number(amount) * 100) / 100
+}
+
+function isValidDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+}
+
+function coerceReimbursable(value: unknown) {
+  if (value === true) return true
+  if (typeof value !== 'string') return false
+  return ['true', '是', '可以', '可报销'].includes(value.trim().toLowerCase())
+}
+
+function validateAiRecord(
+  record: unknown,
+  categories: CategoryConfig,
+  defaultDate: string,
+): { error: string } | { value: TransactionInput; warnings: string[] } {
+  const warnings: string[] = []
+
+  if (!record || typeof record !== 'object') {
+    return { error: 'AI 响应没有包含有效记录。' }
+  }
+
+  const value = record as {
+    type?: string
+    amount?: number
+    category?: string
+    date?: string
+    note?: string
+    reimbursable?: unknown
+  }
+
+  const type = value.type
+  if (type !== 'income' && type !== 'expense') {
+    return { error: 'AI 返回了无效的收支类型。' }
+  }
+
+  const amount = normalizeAmount(Number(value.amount))
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: 'AI 返回了无效金额。' }
+  }
+
+  const date = typeof value.date === 'string' && value.date.trim() ? value.date.trim() : defaultDate
+  if (!isValidDate(date)) {
+    return { error: 'AI 返回了无效日期。' }
+  }
+
+  const allowedCategories = type === 'income' ? categories.income : categories.expense
+  const fallbackCategory = type === 'income' ? '额外收入' : '其他支出'
+  let category = typeof value.category === 'string' ? value.category.trim() : ''
+  if (!allowedCategories.includes(category)) {
+    category = allowedCategories.includes(fallbackCategory) ? fallbackCategory : allowedCategories[0]
+    warnings.push('分类不在预设列表中，已自动归入兜底分类。')
+  }
+
+  return {
+    value: {
+      type,
+      amount,
+      category,
+      date,
+      note: typeof value.note === 'string' ? value.note.trim().slice(0, 100) : '',
+      reimbursable: type === 'expense' && coerceReimbursable(value.reimbursable),
+    },
+    warnings,
+  }
+}
+
+function extractJson(content: string) {
+  try {
+    return JSON.parse(content)
+  } catch {
+    const match = content.match(/\{[\s\S]*\}/)
+    if (!match) return null
+
+    try {
+      return JSON.parse(match[0])
+    } catch {
+      return null
+    }
+  }
+}
+
+async function readUpstreamError(response: Response) {
+  try {
+    const payload = await response.json()
+    const message = payload?.error?.message || payload?.message || payload?.error || response.statusText
+    return `AI 请求失败（${response.status}）：${message}`
+  } catch {
+    try {
+      const text = await response.text()
+      return `AI 请求失败（${response.status}）：${text || response.statusText}`
+    } catch {
+      return `AI 请求失败（${response.status}）：${response.statusText}`
+    }
+  }
+}
+
 function normalizeImportedAiConfig(input: Partial<StoredAiConfig>): StoredAiConfig {
   return {
     provider: typeof input.provider === 'string' && input.provider.trim() ? input.provider.trim() : 'openai-compatible',
@@ -227,57 +337,29 @@ function normalizeImportedAiConfig(input: Partial<StoredAiConfig>): StoredAiConf
   }
 }
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
-  return (await response.json()) as T
-}
-
 export async function getAiConfigStatus(): Promise<AiConfigStatus> {
-  try {
-    const result = await fetchJson<AiConfigStatus>(`${API_BASE}/ai/config`)
-    if (result.ok) {
-      saveLocalAiConfig({
-        provider: result.provider,
-        baseUrl: result.baseUrl || DEFAULT_AI_BASE_URL,
-        model: result.model || DEFAULT_AI_MODEL,
-        apiKey: '',
-        timeoutMs: result.timeoutMs || 20000,
-      })
-    }
-    return result
-  } catch {
-    return toAiConfigStatus(loadLocalAiConfig())
-  }
+  return toAiConfigStatus(loadLocalAiConfig())
 }
 
 export async function saveAiConfig(input: AiConfigInput): Promise<AiConfigUpdateResponse> {
-  try {
-    const result = await fetchJson<AiConfigUpdateResponse>(`${API_BASE}/ai/config`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    })
+  const nextConfig: StoredAiConfig = {
+    provider: 'openai-compatible',
+    baseUrl: input.baseUrl.trim() || DEFAULT_AI_BASE_URL,
+    model: input.model.trim() || DEFAULT_AI_MODEL,
+    apiKey: input.apiKey.trim(),
+    timeoutMs: Number.isFinite(input.timeoutMs) ? input.timeoutMs : 20000,
+  }
 
-    if (result.ok) {
-      saveLocalAiConfig({
-        provider: result.provider,
-        baseUrl: result.baseUrl || DEFAULT_AI_BASE_URL,
-        model: result.model || DEFAULT_AI_MODEL,
-        apiKey: '',
-        timeoutMs: result.timeoutMs || 20000,
-      })
-    }
-
-    return result
-  } catch {
+  if (!nextConfig.apiKey) {
     return {
       ok: false,
-      code: 'AI_UNAVAILABLE',
-      message: 'AI 配置服务不可用，请确认本地后端已启动。',
+      code: 'INVALID_INPUT',
+      message: 'API Key 不能为空。',
     }
   }
+
+  saveLocalAiConfig(nextConfig)
+  return toAiConfigStatus(nextConfig)
 }
 
 export async function getAiExportConfigSnapshot(categoryConfig: CategoryConfig): Promise<AiExportConfigSnapshot> {
@@ -317,13 +399,9 @@ export async function importAiConfigSnapshot(
     }
   }
 
-  const result = await saveAiConfig(normalized)
-  if (!result.ok) {
-    return result
-  }
-
+  saveLocalAiConfig(normalized)
   return {
-    ...result,
+    ...toAiConfigStatus(normalized),
     apiKey: normalized.apiKey,
     apiKeyImported: true,
   }
@@ -333,7 +411,8 @@ export async function parseNaturalLanguageRecord(
   text: string,
   categories: CategoryConfig,
 ): Promise<AiParseRecordResponse> {
-  const status = await getAiConfigStatus()
+  const config = loadLocalAiConfig()
+  const status = toAiConfigStatus(config)
   if (!status.configured) {
     return {
       ok: false,
@@ -342,25 +421,109 @@ export async function parseNaturalLanguageRecord(
     }
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
+  const defaultDate = getToday()
+
   try {
-    return await fetchJson<AiParseRecordResponse>(`${API_BASE}/ai/parse-record`, {
+    const response = await fetch(buildChatCompletionsUrl(config.baseUrl), {
       method: 'POST',
       headers: {
+        Authorization: `Bearer ${config.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text,
-        defaultDate: getToday(),
-        locale: 'zh-CN',
-        categories,
+        model: config.model,
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: buildSystemPrompt({ defaultDate, locale: 'zh-CN', categories }) },
+          { role: 'user', content: text },
+        ],
       }),
+      signal: controller.signal,
     })
-  } catch {
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        code: 'AI_UPSTREAM_ERROR',
+        message: await readUpstreamError(response),
+      }
+    }
+
+    const payload = await response.json()
+    const content = payload?.choices?.[0]?.message?.content
+    if (typeof content !== 'string') {
+      return {
+        ok: false,
+        code: 'PARSE_FAILED',
+        message: 'AI 响应里没有可解析的文本内容。',
+      }
+    }
+
+    const parsed = extractJson(content)
+    if (!parsed) {
+      return {
+        ok: false,
+        code: 'PARSE_FAILED',
+        message: 'AI 响应不是合法 JSON。',
+      }
+    }
+
+    const rawRecords = Array.isArray(parsed.records) ? parsed.records : [parsed.record ?? parsed].filter(Boolean)
+    const records: AiParseRecordSuccessResponse['records'] = []
+    const warnings: string[] = []
+
+    for (const rawRecord of rawRecords) {
+      const validated = validateAiRecord(rawRecord, categories, defaultDate)
+      if ('error' in validated) {
+        warnings.push(validated.error)
+        continue
+      }
+      records.push(validated.value)
+      warnings.push(...validated.warnings)
+    }
+
+    if (!records.length) {
+      return {
+        ok: false,
+        code: 'VALIDATION_FAILED',
+        message: 'AI 没有返回任何有效账目。',
+      }
+    }
+
+    return {
+      ok: true,
+      records,
+      record: records[0],
+      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.8,
+      warnings: [
+        ...(Array.isArray(parsed.warnings) ? parsed.warnings.filter((item: unknown) => typeof item === 'string') : []),
+        ...warnings,
+      ],
+    }
+  } catch (error) {
+    if ((error as { name?: string })?.name === 'AbortError') {
+      return {
+        ok: false,
+        code: 'AI_TIMEOUT',
+        message: 'AI 请求超时，请稍后重试。',
+      }
+    }
+
+    const errorMessage =
+      error instanceof Error && error.message
+        ? `AI 请求失败：${error.message}。请检查网络、Base URL、模型、API Key，或确认该服务允许浏览器直接访问（CORS）。`
+        : 'AI 请求失败。请检查网络、Base URL、模型、API Key，或确认该服务允许浏览器直接访问（CORS）。'
+
     return {
       ok: false,
-      code: 'AI_UNAVAILABLE',
-      message: 'AI 服务不可用，请确认本地后端已启动。',
+      code: 'AI_UPSTREAM_ERROR',
+      message: errorMessage,
     }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

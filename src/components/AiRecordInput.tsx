@@ -418,10 +418,11 @@ export function AiRecordInput({
 
 function getFriendlyError(code: string, message?: string) {
   if (code === 'AI_NOT_CONFIGURED') return 'AI 还没有配置，请先保存 AI 配置。'
-  if (code === 'AI_UNAVAILABLE' || code === 'AI_UPSTREAM_ERROR') return '当前 AI 服务不可用，请稍后再试。'
-  if (code === 'INVALID_INPUT') return '输入内容不符合要求，请换一句更短的描述。'
-  if (code === 'PARSE_FAILED' || code === 'VALIDATION_FAILED') return '没有识别出有效账目，请换一种说法。'
-  if (code === 'AI_TIMEOUT') return 'AI 响应超时，请稍后再试。'
+  if (code === 'AI_UPSTREAM_ERROR') return message || 'AI 请求失败，请检查网络、API Key、模型或浏览器跨域限制。'
+  if (code === 'AI_UNAVAILABLE') return message || '当前 AI 服务不可用，请稍后再试。'
+  if (code === 'INVALID_INPUT') return message || '输入内容不符合要求，请换一句更短的描述。'
+  if (code === 'PARSE_FAILED' || code === 'VALIDATION_FAILED') return message || '没有识别出有效账目，请换一种说法。'
+  if (code === 'AI_TIMEOUT') return message || 'AI 响应超时，请稍后再试。'
   if (message) return message
   return 'AI 识别暂时不可用，请稍后再试。'
 }
