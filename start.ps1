@@ -9,4 +9,5 @@ if (-not (Test-Path '.\node_modules')) {
 }
 
 Write-Host 'Starting personal-bookkeeping-app...' -ForegroundColor Cyan
+Start-Process -FilePath npm.cmd -ArgumentList 'run','backend' -WorkingDirectory $projectRoot -WindowStyle Hidden
 npm run start
