@@ -426,20 +426,23 @@ export async function parseNaturalLanguageRecord(
   const defaultDate = getToday()
 
   try {
-    const response = await fetch(buildChatCompletionsUrl(config.baseUrl), {
+    const response = await fetch('/api/ai/parse-record', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: config.model,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: buildSystemPrompt({ defaultDate, locale: 'zh-CN', categories }) },
-          { role: 'user', content: text },
-        ],
+        text,
+        defaultDate,
+        locale: 'zh-CN',
+        categories,
+        aiConfig: {
+          provider: config.provider,
+          baseUrl: config.baseUrl,
+          model: config.model,
+          apiKey: config.apiKey,
+          timeoutMs: config.timeoutMs,
+        },
       }),
       signal: controller.signal,
     })
@@ -451,58 +454,7 @@ export async function parseNaturalLanguageRecord(
         message: await readUpstreamError(response),
       }
     }
-
-    const payload = await response.json()
-    const content = payload?.choices?.[0]?.message?.content
-    if (typeof content !== 'string') {
-      return {
-        ok: false,
-        code: 'PARSE_FAILED',
-        message: 'AI 响应里没有可解析的文本内容。',
-      }
-    }
-
-    const parsed = extractJson(content)
-    if (!parsed) {
-      return {
-        ok: false,
-        code: 'PARSE_FAILED',
-        message: 'AI 响应不是合法 JSON。',
-      }
-    }
-
-    const rawRecords = Array.isArray(parsed.records) ? parsed.records : [parsed.record ?? parsed].filter(Boolean)
-    const records: AiParseRecordSuccessResponse['records'] = []
-    const warnings: string[] = []
-
-    for (const rawRecord of rawRecords) {
-      const validated = validateAiRecord(rawRecord, categories, defaultDate)
-      if ('error' in validated) {
-        warnings.push(validated.error)
-        continue
-      }
-      records.push(validated.value)
-      warnings.push(...validated.warnings)
-    }
-
-    if (!records.length) {
-      return {
-        ok: false,
-        code: 'VALIDATION_FAILED',
-        message: 'AI 没有返回任何有效账目。',
-      }
-    }
-
-    return {
-      ok: true,
-      records,
-      record: records[0],
-      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.8,
-      warnings: [
-        ...(Array.isArray(parsed.warnings) ? parsed.warnings.filter((item: unknown) => typeof item === 'string') : []),
-        ...warnings,
-      ],
-    }
+    return (await response.json()) as AiParseRecordResponse
   } catch (error) {
     if ((error as { name?: string })?.name === 'AbortError') {
       return {
@@ -514,8 +466,8 @@ export async function parseNaturalLanguageRecord(
 
     const errorMessage =
       error instanceof Error && error.message
-        ? `AI 请求失败：${error.message}。请检查网络、Base URL、模型、API Key，或确认该服务允许浏览器直接访问（CORS）。`
-        : 'AI 请求失败。请检查网络、Base URL、模型、API Key，或确认该服务允许浏览器直接访问（CORS）。'
+        ? `AI 请求失败：${error.message}。请检查网络，或确认站点部署后的 /api/ai/parse-record 可用。`
+        : 'AI 请求失败。请检查网络，或确认站点部署后的 /api/ai/parse-record 可用。'
 
     return {
       ok: false,

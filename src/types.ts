@@ -104,6 +104,7 @@ export type AiParseRecordRequest = {
   defaultDate: string
   locale: 'zh-CN'
   categories: CategoryConfig
+  aiConfig: AiConfigInput
 }
 
 export type AiParseRecordSuccessResponse = {
