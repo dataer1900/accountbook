@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { resolve } from 'node:path'
+import { aiProxyPlugin } from './scripts/vite-ai-proxy.mjs'
 
 export default defineConfig({
   build: {
@@ -13,6 +14,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    aiProxyPlugin(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',
