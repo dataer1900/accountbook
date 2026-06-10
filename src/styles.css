@@ -5,10 +5,17 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
@@ -16,6 +23,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: #f6f6f8;
+  touch-action: manipulation;
 }
 
 button,
@@ -38,7 +46,11 @@ button:disabled {
 .app-shell {
   width: min(460px, 100%);
   margin: 0 auto;
-  padding: calc(16px + env(safe-area-inset-top)) 14px calc(92px + env(safe-area-inset-bottom));
+  padding:
+    calc(16px + env(safe-area-inset-top))
+    calc(14px + env(safe-area-inset-right))
+    calc(92px + env(safe-area-inset-bottom))
+    calc(14px + env(safe-area-inset-left));
 }
 
 .ai-entry-shell {
@@ -894,7 +906,11 @@ button:disabled {
   align-items: end;
   justify-content: center;
   background: rgba(17, 24, 39, 0.16);
-  padding: 16px;
+  padding:
+    16px
+    calc(16px + env(safe-area-inset-right))
+    calc(16px + env(safe-area-inset-bottom))
+    calc(16px + env(safe-area-inset-left));
 }
 
 .composer-sheet {

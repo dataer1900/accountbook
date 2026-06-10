@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { resolve } from 'node:path'
-import { aiProxyPlugin } from './scripts/vite-ai-proxy.mjs'
 
 export default defineConfig({
   build: {
@@ -14,7 +13,6 @@ export default defineConfig({
     },
   },
   plugins: [
-    aiProxyPlugin(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -65,6 +63,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webmanifest}'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/ai-entry\.html$/],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
@@ -90,6 +89,13 @@ export default defineConfig({
                 maxEntries: 32,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
+            },
+          },
+          {
+            urlPattern: ({ request }) => request.destination === 'manifest',
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'manifests',
             },
           },
         ],

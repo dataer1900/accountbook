@@ -441,6 +441,7 @@ export default function App() {
             </div>
             <AiRecordInput
               categories={categoryConfig}
+              onSubmit={handleAiSubmit}
               onConfigStatusChange={setAiConfigured}
               footer={
                 <div className="ai-entry-compact">
