@@ -27,7 +27,6 @@ type SectionKey = 'record' | 'view' | 'reimbursement' | 'mine'
 type ReimbursementStatus = 'unsubmitted' | 'submitted' | 'reimbursed'
 
 export default function App() {
-  const aiEntryPath = '/ai-entry.html'
   const [records, setRecords] = useState<TransactionRecord[]>([])
   const [sourceUtterances, setSourceUtterances] = useState<SourceUtterance[]>([])
   const [categoryConfig, setCategoryConfig] = useState<CategoryConfig>({ income: [], expense: [] })
@@ -48,7 +47,6 @@ export default function App() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedReimbursementIds, setSelectedReimbursementIds] = useState<string[]>([])
   const [reimbursementSelectionMode, setReimbursementSelectionMode] = useState(false)
-  const [quickEntryMessage, setQuickEntryMessage] = useState('')
 
   const report = useMemo(() => createMonthlyReport(records, selectedMonth), [records, selectedMonth])
   const selectedDateRecords = useMemo(
@@ -443,47 +441,6 @@ export default function App() {
               categories={categoryConfig}
               onSubmit={handleAiSubmit}
               onConfigStatusChange={setAiConfigured}
-              footer={
-                <div className="ai-entry-compact">
-                  <div className="ai-entry-compact-header">
-                    <div>
-                      <strong>AI 入口</strong>
-                      <p>可单独添加到桌面</p>
-                    </div>
-                    <code>{aiEntryPath}</code>
-                  </div>
-                  <div className="ai-entry-actions">
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={() => {
-                        window.location.href = `${window.location.origin}${aiEntryPath}`
-                      }}
-                    >
-                      打开
-                    </button>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                            await navigator.clipboard.writeText(`${window.location.origin}${aiEntryPath}`)
-                            setQuickEntryMessage('AI 入口链接已复制。')
-                            return
-                          }
-                          setQuickEntryMessage('当前浏览器不支持一键复制，请手动记下这个链接。')
-                        } catch {
-                          setQuickEntryMessage('复制失败，请稍后重试。')
-                        }
-                      }}
-                    >
-                      复制链接
-                    </button>
-                  </div>
-                  {quickEntryMessage ? <p className="form-success">{quickEntryMessage}</p> : null}
-                </div>
-              }
             />
           </section>
           <section className="panel">
